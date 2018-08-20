@@ -22,7 +22,8 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         mapping(bytes32 => ResidentialRealEstate) residencies;
     }
     
-    mapping (address => PropertyCollection) private registry;
+    mapping (address => PropertyCollection) private ownerRegistry;
+    mapping (bytes32 => address) private propertyRegistry;
     
     constructor() public{
         addAddressToWhitelist(msg.sender);
@@ -36,24 +37,25 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         public
         returns (bool)
     {
-        if(!registry[user].exists){
-            registry[user] = PropertyCollection({
+        if(!ownerRegistry[user].exists){
+            ownerRegistry[user] = PropertyCollection({
                 exists: true,
                 numberOfProperties: 0
             });
         }
         require(!isOwnerOf(user, propertyId));  
-        internalGiveOwnership(user, propertyId, _category);
+        internalGivePropertyOwnership(user, propertyId, _category);
         return true;
     }
     
-    function internalGiveOwnership(address to, bytes32 propertyId, uint _category)
+    function internalGivePropertyOwnership(address to, bytes32 propertyId, uint _category)
         private
     {
-        registry[to].residencies[propertyId] = ResidentialRealEstate({
+        ownerRegistry[to].residencies[propertyId] = ResidentialRealEstate({
             exists: true,
             category: Category(_category)
         });
+        propertyRegistry[propertyId] = to;
     }
     
     function removePropertyOwnership(address user, bytes32 propertyId)
@@ -62,13 +64,14 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         public
     {
         require(isOwnerOf(user, propertyId));
-        internalRemoveOwnership(user, propertyId);
+        internalRemovePropertyOwnership(user, propertyId);
     }
     
-    function internalRemoveOwnership(address user, bytes32 propertyId)
+    function internalRemovePropertyOwnership(address user, bytes32 propertyId)
         private
     {
-        delete registry[user].residencies[propertyId];
+        delete ownerRegistry[user].residencies[propertyId];
+        propertyRegistry[propertyId] = 0x0;
     }
     
     function transferPropertyOwnership(address from, address to, bytes32 propertyId)
@@ -76,9 +79,16 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         public
     {
         require(isOwnerOf(msg.sender, propertyId) || hasRole(msg.sender, "whitelist"));
-        Category _category = registry[from].residencies[propertyId].category;
-        internalRemoveOwnership(from, propertyId);
-        internalGiveOwnership(to, propertyId,uint( _category));
+        Category _category = ownerRegistry[from].residencies[propertyId].category;
+        internalRemovePropertyOwnership(from, propertyId);
+        internalGivePropertyOwnership(to, propertyId,uint( _category));
+    }
+    
+    function whoIsOwnerOf(bytes32 propertyId)
+        public
+        returns(address)
+    {
+        return propertyRegistry[propertyId];
     }
     
     function amIOwnerOf(bytes32 propertyId)
@@ -94,7 +104,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         view
         returns (bool)
     {
-        return registry[user].residencies[propertyId].exists;
+        return ownerRegistry[user].residencies[propertyId].exists;
     }
     
    
