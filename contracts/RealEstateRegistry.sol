@@ -29,7 +29,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         
     }
     
-    function giveOwnership(address user, bytes32 propertyId, uint _category )
+    function givePropertyOwnership(address user, bytes32 propertyId, uint _category )
         onlyIfWhitelisted(msg.sender)
         onlyValidCategory(_category)
         whenNotPaused
@@ -43,12 +43,42 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
             });
         }
         require(!isOwnerOf(user, propertyId));  
-        registry[user].residencies[propertyId] = ResidentialRealEstate({
+        internalGiveOwnership(user, propertyId, _category);
+        return true;
+    }
+    
+    function internalGiveOwnership(address to, bytes32 propertyId, uint _category)
+        private
+    {
+        registry[to].residencies[propertyId] = ResidentialRealEstate({
             exists: true,
             category: Category(_category)
         });
-        return true;
-        
+    }
+    
+    function removePropertyOwnership(address user, bytes32 propertyId)
+        onlyIfWhitelisted(msg.sender)
+        whenNotPaused
+        public
+    {
+        require(isOwnerOf(user, propertyId));
+        internalRemoveOwnership(user, propertyId);
+    }
+    
+    function internalRemoveOwnership(address user, bytes32 propertyId)
+        private
+    {
+        delete registry[user].residencies[propertyId];
+    }
+    
+    function transferPropertyOwnership(address from, address to, bytes32 propertyId)
+        whenNotPaused
+        public
+    {
+        require(isOwnerOf(msg.sender, propertyId) || hasRole(msg.sender, "whitelist"));
+        Category _category = registry[from].residencies[propertyId].category;
+        internalRemoveOwnership(from, propertyId);
+        internalGiveOwnership(to, propertyId,uint( _category));
     }
     
     function amIOwnerOf(bytes32 propertyId)
