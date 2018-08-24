@@ -4,7 +4,7 @@ import "../node_modules/openzeppelin-solidity/contracts/access/Whitelist.sol";
 import "../node_modules/openzeppelin-solidity/contracts/lifecycle/Destructible.sol";
 import "../node_modules/openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
 import "../node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol";
-
+import "./PropertySale.sol";
 
 /**
 @title RealEstateRegistry
@@ -30,10 +30,16 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         mapping(bytes32 => ResidentialRealEstate) residencies;
     }
     
+    struct PropertyInfo{
+        bool exists;
+        address owner;
+        PropertySale sale;
+    }
+    
     // registry of owned properties per user
     mapping (address => PropertyCollection) private ownerRegistry;
     // registry of managed properties
-    mapping (bytes32 => address) private propertyRegistry;
+    mapping (bytes32 => PropertyInfo) private propertyRegistry;
     
     // events
     /// @notice triggered when a property ownership is assigned to a user
@@ -68,7 +74,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
                 numberOfProperties: 0
             });
         }
-        require(propertyRegistry[propertyId] == none);
+        require(propertyRegistry[propertyId].owner == none);
         require(!isOwnerOf(_newOwner, propertyId));  
         internalAssignPropertyOwnership(_newOwner, propertyId, _category);
         emit PropertyOwnershipAssigned(_newOwner, propertyId);
@@ -82,7 +88,17 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
             exists: true,
             category: Category(_category)
         });
-        propertyRegistry[propertyId] = to;
+        ownerRegistry[to].numberOfProperties++;
+        if(!propertyRegistry[propertyId].exists){
+            propertyRegistry[propertyId] = PropertyInfo({
+                exists: true,
+                owner: to,
+                sale: PropertySale(none)
+            });
+        }else{
+            propertyRegistry[propertyId].owner = to;
+            propertyRegistry[propertyId].sale = PropertySale(none);
+        }
 
     }
     
@@ -100,7 +116,8 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         private
     {
         delete ownerRegistry[user].residencies[propertyId];
-        propertyRegistry[propertyId] = none;
+        ownerRegistry[user].numberOfProperties--;
+        propertyRegistry[propertyId].owner = none;
     }
     
     function transferPropertyOwnership(address from, address to, bytes32 propertyId)
@@ -124,7 +141,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         view
         returns(address)
     {
-        return propertyRegistry[propertyId];
+        return propertyRegistry[propertyId].owner;
     }
     
     function amIOwnerOf(bytes32 propertyId)
@@ -140,7 +157,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         view
         returns (bool)
     {
-        return ownerRegistry[user].residencies[propertyId].exists && propertyRegistry[propertyId] == user;
+        return ownerRegistry[user].residencies[propertyId].exists && propertyRegistry[propertyId].owner == user;
     }
     
    
