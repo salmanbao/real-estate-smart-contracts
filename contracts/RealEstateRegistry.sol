@@ -188,6 +188,22 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         return ownerRegistry[user].residencies[propertyId].exists && propertyRegistry[propertyId].owner == user;
     }
     
+    function isOnSale(bytes32 propertyId)
+        public
+        view
+        returns(bool)
+    {
+        return propertyRegistry[propertyId].sale != PropertySaleAuction(0x0);
+    }
+    
+    function getSaleContract(bytes32 propertyId)
+        public 
+        view
+        returns(address)
+    {
+        return propertyRegistry[propertyId].sale;   
+    }
+    
    
     /* Modifiers */
     modifier onlyValidCategory(uint _category){
