@@ -131,12 +131,29 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         internalAssignPropertyOwnership(to, propertyId,uint( _category));
         emit LogPropertyOwnershipTransferred(from, to , propertyId);
     }
+  
+    
+    function putToSale(bytes32 propertyId, uint256 startingBid, uint256 bidTime)
+        onlyIfWhitelisted(msg.sender)
+        onlyIfNotOnSale(propertyId)
+        public
+    {
+        internalSell(propertyRegistry[propertyId].owner, propertyId, startingBid, bidTime);   
+    }
     
     function sell(bytes32 propertyId, uint256 startingBid, uint256 bidTime)
         onlyIfNotOnSale(propertyId)
         public
     {
-        require(isOwnerOf(msg.sender, propertyId));
+        internalSell(msg.sender, propertyId, startingBid, bidTime);
+    }
+    
+      
+    function internalSell(address owner, bytes32 propertyId, uint256 startingBid, uint256 bidTime)
+        onlyIfNotOnSale(propertyId)
+        public
+    {
+        require(isOwnerOf(owner, propertyId));
         PropertySaleAuction auction = new PropertySaleAuction(msg.sender, propertyId, startingBid, bidTime);
         propertyRegistry[propertyId].sale = auction;
         emit LogSaleStarted(msg.sender, propertyId, startingBid, bidTime);
