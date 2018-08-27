@@ -143,6 +143,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
     
     function sell(bytes32 propertyId, uint256 startingBid, uint256 bidTime)
         onlyIfNotOnSale(propertyId)
+        whenNotPaused
         public
     {
         internalSell(msg.sender, propertyId, startingBid, bidTime);
@@ -151,7 +152,7 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
       
     function internalSell(address owner, bytes32 propertyId, uint256 startingBid, uint256 bidTime)
         onlyIfNotOnSale(propertyId)
-        public
+        private
     {
         require(isOwnerOf(owner, propertyId));
         PropertySaleAuction auction = new PropertySaleAuction(msg.sender, propertyId, startingBid, bidTime);
