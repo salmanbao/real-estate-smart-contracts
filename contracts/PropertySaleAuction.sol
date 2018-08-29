@@ -16,8 +16,8 @@ contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
     bool private autoCloseable;
     uint256 private takeProfit;
     uint256 private autoCloseBid;
-    uint256 private topBid;
-    address private topBidder;
+    uint256 public topBid;
+    address public topBidder;
     
     // Allowed withdrawals of previous bids
     mapping(address => uint) returnsPending;
