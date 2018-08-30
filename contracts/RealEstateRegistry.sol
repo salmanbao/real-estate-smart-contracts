@@ -48,8 +48,10 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
     event LogPropertyOwnershipRemoved(address indexed to, bytes32 indexed propertyId);
     /// @notice triggered when a property ownership is transferred from a user to another user
     event LogPropertyOwnershipTransferred(address indexed from, address indexed to, bytes32 indexed propertyId);
+    /// @notice triggered when a sale starts
     event LogSaleStarted(address indexed owner, bytes32 propertyId, uint256 startingBid, uint256 bidTime);
-    
+    /// @notice triggered when a sale has been achieved
+    event LogSaleTerminated(address indexed seller, address indexed buyer, bytes32 propertyId);
     
     constructor() public{
         addAddressToWhitelist(msg.sender);
@@ -126,6 +128,25 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         public
     {
         require(isOwnerOf(msg.sender, propertyId) || hasRole(msg.sender, "whitelist"));
+        internalTransferPropertyOwnership(from, to, propertyId);
+    }
+    
+    function transferPropertyOwnershipSale(address seller, address buyer, bytes32 propertyId)
+        whenNotPaused
+        public
+        returns(bool)
+    {
+        require(isOwnerOf(seller, propertyId));
+        require(msg.sender == address(propertyRegistry[propertyId].sale));
+        internalTransferPropertyOwnership(seller, buyer, propertyId);
+        emit LogSaleTerminated(seller, buyer, propertyId);
+        return true;
+    }
+    
+    function internalTransferPropertyOwnership(address from, address to, bytes32 propertyId)
+        whenNotPaused
+        public
+    {
         Category _category = ownerRegistry[from].residencies[propertyId].category;
         internalRemovePropertyOwnership(from, propertyId);
         internalAssignPropertyOwnership(to, propertyId,uint( _category));
@@ -143,20 +164,21 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
     
     function sell(bytes32 propertyId, uint256 startingBid, uint256 bidTime)
         onlyIfNotOnSale(propertyId)
+        whenNotPaused
         public
     {
         internalSell(msg.sender, propertyId, startingBid, bidTime);
     }
     
-      
+
     function internalSell(address owner, bytes32 propertyId, uint256 startingBid, uint256 bidTime)
         onlyIfNotOnSale(propertyId)
-        public
+        private
     {
         require(isOwnerOf(owner, propertyId));
-        PropertySaleAuction auction = new PropertySaleAuction(msg.sender, propertyId, startingBid, bidTime);
+        PropertySaleAuction auction = new PropertySaleAuction(address(this), owner, propertyId, startingBid, bidTime);
         propertyRegistry[propertyId].sale = auction;
-        emit LogSaleStarted(msg.sender, propertyId, startingBid, bidTime);
+        emit LogSaleStarted(owner, propertyId, startingBid, bidTime);
     }
     
     /**
@@ -188,6 +210,22 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
         return ownerRegistry[user].residencies[propertyId].exists && propertyRegistry[propertyId].owner == user;
     }
     
+    function isOnSale(bytes32 propertyId)
+        public
+        view
+        returns(bool)
+    {
+        return propertyRegistry[propertyId].sale != PropertySaleAuction(0x0);
+    }
+    
+    function getSaleContract(bytes32 propertyId)
+        public 
+        view
+        returns(address)
+    {
+        return propertyRegistry[propertyId].sale;   
+    }
+    
    
     /* Modifiers */
     modifier onlyValidCategory(uint _category){
@@ -197,6 +235,11 @@ contract RealEstateRegistry is Whitelist, Pausable, Destructible{
     
     modifier onlyIfNotOnSale(bytes32 propertyId){
         require(propertyRegistry[propertyId].sale == PropertySaleAuction(0x0));
+        _;
+    }
+    
+    modifier onlyIfOnSale(bytes32 propertyId){
+        require(propertyRegistry[propertyId].sale != PropertySaleAuction(0x0));
         _;
     }
     

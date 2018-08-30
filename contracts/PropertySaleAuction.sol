@@ -3,6 +3,7 @@ pragma solidity ^0.4.24;
 import "../node_modules/openzeppelin-solidity/contracts/access/Whitelist.sol";
 import "../node_modules/openzeppelin-solidity/contracts/lifecycle/Destructible.sol";
 import "../node_modules/openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
+import "./RealEstateRegistry.sol";
 
 contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
     
@@ -16,22 +17,24 @@ contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
     bool private autoCloseable;
     uint256 private takeProfit;
     uint256 private autoCloseBid;
-    uint256 private topBid;
-    address private topBidder;
+    uint256 public topBid;
+    address public topBidder;
     
     // Allowed withdrawals of previous bids
-    mapping(address => uint) returnsPending;
+    mapping(address => uint) private returnsPending;
     // Will be set true once the auction is complete, preventing any further change
     bool auctionComplete;
+    RealEstateRegistry private realEstateRegistry;
+    
     
     // Events to fire when change happens.
     event LogTopBidIncreased(address bidder, uint bidAmount);
     event LogAuctionResult(address winner, uint bidAmount);
     
-    constructor(address _beneficiaryAddress, bytes32 _propertyId, uint256 _startingBid, uint256 _bidTime ) 
+    constructor(address _realEstateRegistryAddress, address _beneficiaryAddress, bytes32 _propertyId, uint256 _startingBid, uint256 _bidTime ) 
         public
     {
-        addAddressToWhitelist(msg.sender);
+        addAddressToWhitelist(_beneficiaryAddress);
         require(_beneficiaryAddress != 0x0);
         beneficiaryAddress = _beneficiaryAddress;
         propertyId = _propertyId;
@@ -41,6 +44,7 @@ contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
         startingBid = _startingBid;
         topBid = startingBid;
         auctionComplete = false;
+        realEstateRegistry = RealEstateRegistry(_realEstateRegistryAddress);
     }
     
     function setTakeProfit(uint256 _takeProfit)
@@ -64,7 +68,7 @@ contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
        topBid = msg.value;
        emit LogTopBidIncreased(msg.sender, msg.value);
        if(autoCloseable && topBid >= takeProfit){
-           auctionClose();
+           internalCloseAuction();
        }
     }
     
@@ -73,7 +77,7 @@ contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
         returns(bool)
     {
         uint bidAmount = returnsPending[msg.sender];
-        if(bidAmount > 0){
+        if(bidAmount > 0 && msg.sender == topBidder){
             returnsPending[msg.sender] = 0;
             if(!msg.sender.send(bidAmount)){
                 returnsPending[msg.sender] = bidAmount;
@@ -83,14 +87,24 @@ contract PropertySaleAuction is  Whitelist, Pausable, Destructible{
         return true;
     }
     
-    function auctionClose() 
+    function closeAuction() 
         onlyIfWhitelisted(msg.sender)
         public
+    {
+        internalCloseAuction();
+    }
+    
+    function internalCloseAuction()
+        private
     {
         require(!auctionComplete); 
         auctionComplete = true;
         emit LogAuctionResult(topBidder, topBid);
         beneficiaryAddress.transfer(topBid);
+        returnsPending[topBidder] = 0;
+        require(realEstateRegistry
+                    .transferPropertyOwnershipSale(beneficiaryAddress, topBidder, propertyId)
+        );
     }
     
     modifier onlyIfPending(){
